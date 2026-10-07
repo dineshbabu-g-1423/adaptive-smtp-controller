@@ -2,8 +2,8 @@
 /bin/
 *.exe
 *.out
-controller
-simulator
+/controller
+/simulator
 
 # Test / coverage
 *.test
@@ -18,3 +18,8 @@ go.work.sum
 .idea/
 .vscode/
 .DS_Store
+
+# Editor swap files
+*.swp
+*.swo
+*~
