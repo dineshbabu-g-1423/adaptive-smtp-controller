@@ -30,6 +30,7 @@ func TestOutcomesMoveTheScoreInTheRightDirection(t *testing.T) {
 		{model.OutcomeDeferred, false},
 		{model.OutcomeTimeout, false},
 		{model.OutcomeBounce, false},
+		{model.OutcomeBlocked, false},
 	}
 	for _, c := range cases {
 		s := NewStore()
@@ -47,7 +48,7 @@ func TestOutcomesMoveTheScoreInTheRightDirection(t *testing.T) {
 // The point of smoothing: one bad attempt against an otherwise healthy address
 // must not collapse its score. A sender that reroutes on a single 5xx will
 // thrash between addresses and warm none of them.
-func TestOneBounceDoesNotCollapseAGoodReputation(t *testing.T) {
+func TestOneRefusalDoesNotCollapseAGoodReputation(t *testing.T) {
 	s := NewStore()
 	observe(s, "ip", "gmail", model.OutcomeSuccess, 50)
 	before := s.Get("ip", "gmail")
@@ -55,25 +56,45 @@ func TestOneBounceDoesNotCollapseAGoodReputation(t *testing.T) {
 		t.Fatalf("sustained success only reached %v, expected it to approach 100", before)
 	}
 
-	s.Observe(model.Attempt{IP: "ip", Provider: "gmail", Outcome: model.OutcomeBounce})
+	s.Observe(model.Attempt{IP: "ip", Provider: "gmail", Outcome: model.OutcomeBlocked})
 	after := s.Get("ip", "gmail")
 
 	drop := before - after
 	if drop > 15 {
-		t.Errorf("a single bounce dropped the score by %v, which is too sharp to be stable", drop)
+		t.Errorf("a single policy refusal dropped the score by %v, which is too sharp to be stable", drop)
 	}
 	if after >= before {
-		t.Error("a bounce must still move the score down")
+		t.Error("a refusal must still move the score down")
 	}
 }
 
 // Sustained failure has to be able to reach a low score, or the smoothing
 // would make the signal useless.
-func TestSustainedFailureReachesALowScore(t *testing.T) {
+func TestSustainedBlockingReachesALowScore(t *testing.T) {
 	s := NewStore()
-	observe(s, "ip", "gmail", model.OutcomeBounce, 100)
+	observe(s, "ip", "gmail", model.OutcomeBlocked, 100)
 	if got := s.Get("ip", "gmail"); got > 15 {
-		t.Fatalf("100 bounces left the score at %v, expected it to approach 10", got)
+		t.Fatalf("100 policy refusals left the score at %v, expected it to approach 5", got)
+	}
+}
+
+// A dead mailbox is a list-hygiene problem, not a reputation one. Sending to
+// stale addresses should not look the same to this score as being refused on
+// policy, or a customer importing an old list would tank an otherwise healthy
+// IP and trigger rerouting that fixes nothing.
+func TestDeadMailboxesBarelyMoveTheScore(t *testing.T) {
+	bounces := NewStore()
+	observe(bounces, "ip", "gmail", model.OutcomeBounce, 100)
+
+	blocks := NewStore()
+	observe(blocks, "ip", "gmail", model.OutcomeBlocked, 100)
+
+	b, bl := bounces.Get("ip", "gmail"), blocks.Get("ip", "gmail")
+	if b <= bl {
+		t.Fatalf("dead mailboxes scored %v and policy blocks %v: blocks must hurt far more", b, bl)
+	}
+	if b < 40 {
+		t.Errorf("100 dead mailboxes dropped the score to %v, which overstates a hygiene problem", b)
 	}
 }
 
@@ -82,7 +103,7 @@ func TestSustainedFailureReachesALowScore(t *testing.T) {
 // healthy capacity.
 func TestReputationIsPerProviderNotPerIP(t *testing.T) {
 	s := NewStore()
-	observe(s, "ip", "gmail", model.OutcomeBounce, 40)
+	observe(s, "ip", "gmail", model.OutcomeBlocked, 40)
 
 	if gmail := s.Get("ip", "gmail"); gmail > 30 {
 		t.Fatalf("gmail score %v, expected it to have fallen", gmail)
@@ -98,7 +119,7 @@ func TestScoreStaysWithinBounds(t *testing.T) {
 	if v := s.Get("ip", "gmail"); v > 100 {
 		t.Errorf("score %v exceeded 100", v)
 	}
-	observe(s, "ip2", "gmail", model.OutcomeBounce, 500)
+	observe(s, "ip2", "gmail", model.OutcomeBlocked, 500)
 	if v := s.Get("ip2", "gmail"); v < 0 {
 		t.Errorf("score %v fell below 0", v)
 	}

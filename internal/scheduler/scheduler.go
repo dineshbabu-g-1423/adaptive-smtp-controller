@@ -19,10 +19,11 @@ import (
 
 // Stats is an atomic counter bundle for observability.
 type Stats struct {
-	Sent     int64
-	Deferred int64
-	Bounced  int64
-	Timeouts int64
+	Sent      int64
+	Deferred  int64
+	Bounced   int64
+	Timeouts  int64
+	Blocked   int64 // permanent refusals aimed at the sender, not the recipient
 	Throttled int64 // admission rejections (rate limited)
 }
 
@@ -150,7 +151,15 @@ func (s *Scheduler) process(m model.Message, now time.Time) {
 		// healthy traffic: let provider rate recover a touch.
 		s.deps.Hier.Provider(m.Provider).Recover(1)
 	case model.OutcomeBounce:
-		atomic.AddInt64(&s.stats.Bounced, 1) // permanent: drop
+		// Permanent and the recipient's fault: drop the message. In a system
+		// with a suppression list this is where the address would be added.
+		atomic.AddInt64(&s.stats.Bounced, 1)
+	case model.OutcomeBlocked:
+		// Permanent and our fault. Drop the message, but the recipient is fine
+		// and must not be suppressed. Back the provider off: continuing at the
+		// same rate into a policy refusal is how a soft block becomes a hard one.
+		atomic.AddInt64(&s.stats.Blocked, 1)
+		s.deps.Hier.Provider(m.Provider).Throttle(0.75)
 	case model.OutcomeTimeout:
 		atomic.AddInt64(&s.stats.Timeouts, 1)
 		s.requeue(m, br, now)
@@ -194,6 +203,7 @@ func (s *Scheduler) Stats() Stats {
 		Deferred:  atomic.LoadInt64(&s.stats.Deferred),
 		Bounced:   atomic.LoadInt64(&s.stats.Bounced),
 		Timeouts:  atomic.LoadInt64(&s.stats.Timeouts),
+		Blocked:   atomic.LoadInt64(&s.stats.Blocked),
 		Throttled: atomic.LoadInt64(&s.stats.Throttled),
 	}
 }

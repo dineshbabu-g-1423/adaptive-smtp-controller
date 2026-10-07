@@ -9,9 +9,22 @@ type Outcome string
 const (
 	OutcomeSuccess  Outcome = "success"
 	OutcomeDeferred Outcome = "deferred" // 4xx - transient, retry later
-	OutcomeBounce   Outcome = "bounce"   // 5xx - permanent, drop
+	OutcomeBounce   Outcome = "bounce"   // 5xx about the recipient - permanent, drop
+	OutcomeBlocked  Outcome = "blocked"  // 5xx about the sender - permanent, drop
 	OutcomeTimeout  Outcome = "timeout"  // network/no response
 )
+
+// Permanent reports whether retrying this message can ever succeed.
+func (o Outcome) Permanent() bool { return o == OutcomeBounce || o == OutcomeBlocked }
+
+// SuppressRecipient reports whether the failure says anything about the
+// recipient, as opposed to about the sender.
+//
+// Keeping this separate from Permanent is the point. A reputation block and an
+// unknown mailbox are both permanent, but only one of them is the recipient's
+// fault. Senders that treat them alike suppress good addresses every time their
+// own reputation dips, and never get them back.
+func (o Outcome) SuppressRecipient() bool { return o == OutcomeBounce }
 
 // Message is a single email queued for delivery.
 type Message struct {

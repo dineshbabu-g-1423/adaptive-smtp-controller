@@ -56,7 +56,13 @@ func (s *Store) Observe(a model.Attempt) {
 	case model.OutcomeTimeout:
 		target = 40
 	case model.OutcomeBounce:
-		target = 10
+		// The recipient did not exist. That is a list-hygiene problem, not a
+		// reputation one, so it barely moves the score for this IP.
+		target = 60
+	case model.OutcomeBlocked:
+		// The receiver refused us on policy or reputation. This is the signal
+		// the score exists to capture, so it pulls hard.
+		target = 5
 	default:
 		target = neutral
 	}
