@@ -1,0 +1,19 @@
+# Shared & dedicated IP pools plus seeded per-(IP, provider) reputation scores.
+ips:
+  - addr: 203.0.113.10
+    pool: shared
+  - addr: 203.0.113.11
+    pool: shared
+  - addr: 198.51.100.20
+    pool: dedicated
+    customer_id: acme
+
+# Seed reputation (0..100) so routing is interesting from the first message.
+# Example: IP .10 is strong on Gmail/Yahoo, IP .11 is strong on Outlook.
+reputation:
+  - { ip: 203.0.113.10, provider: gmail,   score: 92 }
+  - { ip: 203.0.113.10, provider: outlook, score: 61 }
+  - { ip: 203.0.113.10, provider: yahoo,   score: 88 }
+  - { ip: 203.0.113.11, provider: gmail,   score: 78 }
+  - { ip: 203.0.113.11, provider: outlook, score: 94 }
+  - { ip: 203.0.113.11, provider: yahoo,   score: 85 }

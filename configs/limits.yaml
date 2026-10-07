@@ -1,0 +1,13 @@
+# Hierarchical rate-limit ceilings (tokens per second).
+# Effective rate for any message = min() across these dimensions.
+throttle:
+  global_rate: 500
+  global_burst: 500
+  customer_rate: 500
+  domain_rate: 200
+  default_provider_rate: 80
+  provider_rate:
+    gmail: 100
+    outlook: 100
+    yahoo: 100
+  ip_rate: 80

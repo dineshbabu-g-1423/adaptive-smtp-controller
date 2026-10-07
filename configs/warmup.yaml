@@ -1,0 +1,9 @@
+# IP warmup schedules (daily allowances) with auto pause/rollback thresholds.
+thresholds:
+  bounce_rate: 0.05
+  deferral_rate: 0.20
+  complaint_rate: 0.01
+
+schedules:
+  - ip: 198.51.100.20
+    days: [1000, 2500, 5000, 10000, 25000, 50000]
